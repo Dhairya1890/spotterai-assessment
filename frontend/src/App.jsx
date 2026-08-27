@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import './eld-export.css'
 import RouteMap from './RouteMap.jsx'
+import { exportEldPdf } from './exportEldPdf.js'
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 const INITIAL_FORM = { current_location: '', pickup_location: '', dropoff_location: '', current_cycle_used: '0' }
@@ -36,7 +38,7 @@ function EldLog({ days }) {
   const [active, setActive] = useState(0)
   const day = days[active]
   if (!day) return null
-  return <section className="panel eld"><header className="panel-head"><div><span className="eyebrow">Compliance record</span><h2>ELD log</h2></div><div className="switch"><button onClick={() => setActive(Math.max(0, active - 1))} disabled={!active}>&lt;</button><span>Day {active + 1} of {days.length}</span><button onClick={() => setActive(Math.min(days.length - 1, active + 1))} disabled={active === days.length - 1}>&gt;</button></div></header><div className="eld-grid"><div className="hours"><span>Status</span>{Array.from({ length: 13 }, (_, index) => <b key={index}>{String(index * 2).padStart(2, '0')}</b>)}</div>{Object.entries(STATUS_NAMES).map(([status, label]) => <div className="eld-row" key={status}><span>{label}</span><div>{day.grid.map((slot, index) => slot === status && <i key={index} style={{ left: `${index / 96 * 100}%`, width: `${100 / 96 + .2}%` }} />)}</div><b>{Number(day.totals[status] || 0).toFixed(1)}h</b></div>)}</div><div className="remarks"><h3>Log events &amp; remarks</h3>{day.events.map((event, index) => <div key={`${event.start_time}-${index}`}><time>{event.start_time}</time><b>{STATUS_NAMES[event.status]}</b><span>{event.location}</span><em>{event.notes}</em></div>)}</div></section>
+  return <section className="panel eld"><header className="panel-head"><div><span className="eyebrow">Compliance record</span><h2>ELD log</h2></div><div className="eld-actions"><div className="switch"><button onClick={() => setActive(Math.max(0, active - 1))} disabled={!active}>&lt;</button><span>Day {active + 1} of {days.length}</span><button onClick={() => setActive(Math.min(days.length - 1, active + 1))} disabled={active === days.length - 1}>&gt;</button></div><button type="button" className="export-button" onClick={() => exportEldPdf(days)} title="Download all ELD days as a PDF">Export PDF</button></div></header><div className="eld-grid"><div className="hours"><span>Status</span>{Array.from({ length: 13 }, (_, index) => <b key={index}>{String(index * 2).padStart(2, '0')}</b>)}</div>{Object.entries(STATUS_NAMES).map(([status, label]) => <div className="eld-row" key={status}><span>{label}</span><div>{day.grid.map((slot, index) => slot === status && <i key={index} style={{ left: `${index / 96 * 100}%`, width: `${100 / 96 + .2}%` }} />)}</div><b>{Number(day.totals[status] || 0).toFixed(1)}h</b></div>)}</div><div className="remarks"><h3>Log events &amp; remarks</h3>{day.events.map((event, index) => <div key={`${event.start_time}-${index}`}><time>{event.start_time}</time><b>{STATUS_NAMES[event.status]}</b><span>{event.location}</span><em>{event.notes}</em></div>)}</div></section>
 }
 
 function AuthPage({ onAuthenticated }) {

@@ -16,16 +16,15 @@ const colors = {
 
 function drawGrid(doc, day, startY) {
   const left = 48
-  const top = startY + 12
-  const width = 135
+  const top = startY + 24
   const rowHeight = 9
   const gridWidth = 112
   const slotWidth = gridWidth / 96
   doc.setFontSize(8)
   doc.setTextColor(115, 95, 86)
-  doc.text('Status', left, top - 4)
+  doc.text('Status', left, top - 10)
   for (let hour = 0; hour <= 24; hour += 2) {
-    doc.text(`${String(hour).padStart(2, '0')}:00`, left + 22 + (hour / 24) * gridWidth, top - 4, { align: hour === 24 ? 'right' : 'left' })
+    doc.text(`${String(hour).padStart(2, '0')}:00`, left + 22 + (hour / 24) * gridWidth, top - 10, { align: hour === 24 ? 'right' : 'left' })
   }
 
   statuses.forEach(([status, label], row) => {
@@ -49,21 +48,34 @@ function drawGrid(doc, day, startY) {
 function drawEvents(doc, day, startY) {
   let y = startY
   doc.setFillColor(255, 241, 235)
-  doc.rect(40, y, 130, 9, 'F')
+  doc.rect(40, y, 130, 10, 'F')
   doc.setTextColor(37, 25, 19)
   doc.setFontSize(10)
-  doc.text('Log events and remarks', 44, y + 6)
-  y += 16
+  doc.text('Log events and remarks', 44, y + 6.5)
+  y += 18
   doc.setFontSize(8)
+  doc.setTextColor(115, 95, 86)
+  doc.text('Time', 44, y)
+  doc.text('Status', 65, y)
+  doc.text('Location', 95, y)
+  doc.text('Remarks', 143, y)
+  y += 7
   day.events.forEach((event) => {
-    if (y > 270) {
+    const location = doc.splitTextToSize(event.location || '', 44)
+    const notes = doc.splitTextToSize(event.notes || '', 25)
+    const rowHeight = Math.max(11, Math.max(location.length, notes.length) * 4 + 6)
+    if (y + rowHeight > 270) {
       doc.addPage()
-      y = 20
+      y = 24
     }
-    const lines = doc.splitTextToSize(`${event.start_time} - ${event.end_time}   ${event.status.replaceAll('_', ' ')}   ${event.location}   ${event.notes}`, 130)
+    doc.setDrawColor(224, 192, 177)
+    doc.line(40, y - 4, 170, y - 4)
     doc.setTextColor(115, 95, 86)
-    doc.text(lines, 44, y)
-    y += Math.max(7, lines.length * 4 + 3)
+    doc.text(`${event.start_time} - ${event.end_time}`, 44, y)
+    doc.text(event.status.replaceAll('_', ' '), 65, y)
+    doc.text(location, 95, y)
+    doc.text(notes, 143, y)
+    y += rowHeight
   })
 }
 
@@ -81,7 +93,7 @@ export function exportEldPdf(days) {
     doc.setTextColor(115, 95, 86)
     doc.text('Electronic duty record generated from the calculated trip plan', 40, 39)
     const eventEnd = drawGrid(doc, day, 54)
-    drawEvents(doc, day, eventEnd + 12)
+    drawEvents(doc, day, eventEnd + 20)
   })
   doc.save(`spotterai-eld-${new Date().toISOString().slice(0, 10)}.pdf`)
 }
