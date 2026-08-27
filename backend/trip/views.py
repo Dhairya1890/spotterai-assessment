@@ -1,6 +1,10 @@
 import json
 
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 
 from .eld_generator import generate_eld_logs
 from .hos_calculator import calculate_trip
@@ -21,6 +25,12 @@ def _json_body(request) -> tuple[dict | None, JsonResponse | None]:
 
 def _error_response(result: dict, status: int = 400) -> JsonResponse:
     return JsonResponse(result, status=status)
+
+
+def _auth_required(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "error": "Authentication required"}, status=401)
+    return None
 
 
 def _resolve_location(value, field_name: str) -> tuple[dict | None, JsonResponse | None]:
@@ -65,7 +75,50 @@ def health_check(request):
     return JsonResponse({"success": True, "service": "trip"})
 
 
+@csrf_exempt
+def auth_view(request):
+    payload, error = _json_body(request)
+    if error:
+        return error
+    action = payload.get("action", "login")
+    email = str(payload.get("email", "")).strip().lower()
+    password = payload.get("password", "")
+    if not email or not isinstance(password, str) or len(password) < 8:
+        return _error_response({"success": False, "error": "Email and a password of at least 8 characters are required"})
+    if action == "signup":
+        if User.objects.filter(username=email).exists():
+            return _error_response({"success": False, "error": "An account with this email already exists"}, 409)
+        user = User.objects.create_user(username=email, email=email, password=password)
+        login(request, user)
+    elif action == "login":
+        user = authenticate(request, username=email, password=password)
+        if user is None:
+            return _error_response({"success": False, "error": "Invalid email or password"}, 401)
+        login(request, user)
+    else:
+        return _error_response({"success": False, "error": "Unsupported authentication action"})
+    return JsonResponse({"success": True, "user": {"email": user.email}})
+
+
+@csrf_exempt
+def auth_logout_view(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST method required"}, status=405)
+    logout(request)
+    return JsonResponse({"success": True})
+
+
+def auth_session_view(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "authenticated": False}, status=401)
+    return JsonResponse({"success": True, "authenticated": True, "user": {"email": request.user.email}})
+
+
+@csrf_exempt
 def calculate_trip_view(request):
+    auth_error = _auth_required(request)
+    if auth_error:
+        return auth_error
     payload, error = _json_body(request)
     if error:
         return error
@@ -81,7 +134,11 @@ def calculate_trip_view(request):
     return JsonResponse({"success": True, "route": trip["route"], "hos": hos, "eld": eld})
 
 
+@csrf_exempt
 def calculate_hos_view(request):
+    auth_error = _auth_required(request)
+    if auth_error:
+        return auth_error
     payload, error = _json_body(request)
     if error:
         return error
@@ -92,7 +149,11 @@ def calculate_hos_view(request):
     return JsonResponse(result, status=200 if result.get("success") else 400)
 
 
+@csrf_exempt
 def generate_eld_view(request):
+    auth_error = _auth_required(request)
+    if auth_error:
+        return auth_error
     payload, error = _json_body(request)
     if error:
         return error

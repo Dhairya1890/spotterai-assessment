@@ -46,6 +46,14 @@ def _location(place: dict) -> str:
     return str(place.get("display_name") or "Unknown location")
 
 
+def _route_location(miles: float, total_miles: float, start_name: str, end_name: str) -> str:
+    if miles <= 0:
+        return start_name
+    if miles >= total_miles:
+        return end_name
+    return f"Near route mile {miles:.1f}"
+
+
 def _point_at_miles(coordinates: list, miles: float, total_miles: float) -> dict:
     if not coordinates:
         return {}
@@ -107,6 +115,7 @@ def calculate_trip(data: dict) -> dict:
     try:
         current, pickup, dropoff, total_miles, total_hours, cycle_used, coordinates = _validate_input(data)
         current_name, pickup_name, dropoff_name = map(_location, (current, pickup, dropoff))
+        location_at_miles = lambda distance: _route_location(distance, total_miles, current_name, dropoff_name)
         pace = total_hours / total_miles if total_miles else 0.0
         fuel_interval = int(FUEL_STOP_INTERVAL_MILES)
         fuel_positions = list(range(fuel_interval, math.floor(total_miles) + 1, fuel_interval))
@@ -120,7 +129,7 @@ def calculate_trip(data: dict) -> dict:
 
         def restart() -> None:
             nonlocal current_time, cycle, had_restart, shift_start, shift_driving, driving_since_break
-            current_time = _add_event(events, "off_duty", current_time, RESTART_HOURS, current_name, "34-hour cycle restart")
+            current_time = _add_event(events, "off_duty", current_time, RESTART_HOURS, location_at_miles(miles), "34-hour cycle restart", miles, miles)
             cycle = 0.0
             had_restart = True
             shift_start = current_time
@@ -128,7 +137,7 @@ def calculate_trip(data: dict) -> dict:
 
         def end_shift() -> None:
             nonlocal current_time, shift_start, shift_driving, driving_since_break
-            current_time = _add_event(events, "off_duty", current_time, REST_PERIOD_HOURS, current_name, "10-hour rest period")
+            current_time = _add_event(events, "off_duty", current_time, REST_PERIOD_HOURS, location_at_miles(miles), "10-hour rest period", miles, miles)
             shift_start = current_time
             shift_driving = driving_since_break = 0.0
 
@@ -157,33 +166,33 @@ def calculate_trip(data: dict) -> dict:
                 elif shift_driving >= MAX_DRIVING_HOURS_PER_SHIFT - 1e-7 or current_time >= shift_start + MAX_WINDOW_HOURS * 60 - 1e-7:
                     end_shift()
                 else:
-                    current_time = _add_event(events, "off_duty", current_time, BREAK_DURATION_HOURS, current_name, "Mandatory 30-minute break")
+                    current_time = _add_event(events, "off_duty", current_time, BREAK_DURATION_HOURS, location_at_miles(miles), "Mandatory 30-minute break", miles, miles)
                     driving_since_break = 0.0
                 continue
             start_miles = miles
             miles = min(total_miles, miles + available / pace) if pace else total_miles
             actual_hours = (miles - start_miles) * pace
             current_time = _add_event(events, "driving", current_time, actual_hours,
-                                      f"{current_name} to {dropoff_name}", "Driving segment", start_miles, miles)
+                                      f"{location_at_miles(start_miles)} to {location_at_miles(miles)}", "Driving segment", start_miles, miles)
             shift_driving += actual_hours
             driving_since_break += actual_hours
             cycle += actual_hours
             logger.info("HOS driving: miles %.2f -> %.2f, hours %.2f, cycle %.2f", start_miles, miles, actual_hours, cycle)
             if miles >= next_mile - 1e-7 and next_mile < total_miles:
-                current_time = _add_event(events, "on_duty_not_driving", current_time, FUEL_STOP_DURATION_HOURS, dropoff_name, "Fuel stop")
+                current_time = _add_event(events, "on_duty_not_driving", current_time, FUEL_STOP_DURATION_HOURS, location_at_miles(miles), "Fuel stop", miles, miles)
                 cycle += FUEL_STOP_DURATION_HOURS
                 fuel_index += 1
             elif miles >= total_miles - 1e-7:
                 break
             elif driving_since_break >= REQUIRED_BREAK_AFTER_HOURS - 1e-7:
-                current_time = _add_event(events, "off_duty", current_time, BREAK_DURATION_HOURS, current_name, "Mandatory 30-minute break")
+                current_time = _add_event(events, "off_duty", current_time, BREAK_DURATION_HOURS, location_at_miles(miles), "Mandatory 30-minute break", miles, miles)
                 driving_since_break = 0.0
 
         while cycle + DROPOFF_DURATION_HOURS > MAX_CYCLE_HOURS + 1e-7:
             restart()
         if shift_driving >= MAX_DRIVING_HOURS_PER_SHIFT - 1e-7 or current_time + DROPOFF_DURATION_HOURS * 60 > shift_start + MAX_WINDOW_HOURS * 60 + 1e-7:
             end_shift()
-        current_time = _add_event(events, "on_duty_not_driving", current_time, DROPOFF_DURATION_HOURS, dropoff_name, "Dropoff")
+        current_time = _add_event(events, "on_duty_not_driving", current_time, DROPOFF_DURATION_HOURS, dropoff_name, "Dropoff", total_miles, total_miles)
         cycle += DROPOFF_DURATION_HOURS
         return _build_result(events, current, total_miles, total_hours, cycle_used, had_restart, coordinates)
     except (TypeError, ValueError, KeyError, IndexError) as exc:
@@ -209,8 +218,7 @@ def _build_result(events: list[_Event], current: dict, total_miles: float, total
                                    "duration_hours": _hours(start - cursor), "location": _location(current), "notes": "Off duty"})
             entry = {"event_type": event.event_type, "start_time": _time(start), "end_time": _time(end),
                      "duration_hours": _hours(end - start), "location": event.location, "notes": event.notes}
-            if event.event_type == "driving":
-                entry.update(_point_at_miles(coordinates, event.start_miles, total_miles))
+            entry.update(_point_at_miles(coordinates, event.start_miles, total_miles))
             day_events.append(entry)
             cursor = max(cursor, end)
         if cursor < day_end:

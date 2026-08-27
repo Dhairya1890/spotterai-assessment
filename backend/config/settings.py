@@ -70,3 +70,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 ORS_API_KEY = os.environ.get("ORS_API_KEY", "")
 ORS_BASE_URL = os.environ.get("ORS_BASE_URL", "")
 CORS_ALLOWED_ORIGINS = [origin for origin in os.environ["CORS_ALLOWED_ORIGINS"].split(",") if origin]
+CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
+CORS_ALLOW_CREDENTIALS = True
