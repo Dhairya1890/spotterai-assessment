@@ -4,7 +4,11 @@ import './eld-export.css'
 import RouteMap from './RouteMap.jsx'
 import { exportEldPdf } from './exportEldPdf.js'
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+const configuredApi = import.meta.env.VITE_API_BASE_URL?.trim()
+const configuredApiBase = configuredApi && !configuredApi.includes('<your-render-domain>')
+  ? configuredApi.replace(/\/$/, '')
+  : 'http://localhost:8000/api'
+const API = configuredApiBase.endsWith('/api') ? configuredApiBase : `${configuredApiBase}/api`
 const INITIAL_FORM = { current_location: '', pickup_location: '', dropoff_location: '', current_cycle_used: '0' }
 const STATUS_NAMES = { off_duty: 'Off duty', sleeper_berth: 'Sleeper berth', driving: 'Driving', on_duty_not_driving: 'On duty (ND)' }
 

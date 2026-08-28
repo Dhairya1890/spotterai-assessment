@@ -8,7 +8,11 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 DEBUG = os.environ["DJANGO_DEBUG"].lower() == "true"
-ALLOWED_HOSTS = [host for host in os.environ["DJANGO_ALLOWED_HOSTS"].split(",") if host]
+allowed_hosts = os.environ.get("DJANGO_ALLOWED_HOSTS", "")
+render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
+ALLOWED_HOSTS = [host.strip() for host in f"{allowed_hosts},{render_hostname}".split(",") if host.strip()]
+if not ALLOWED_HOSTS and DEBUG:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -72,5 +76,7 @@ ORS_BASE_URL = os.environ.get("ORS_BASE_URL", "")
 CORS_ALLOWED_ORIGINS = [origin for origin in os.environ["CORS_ALLOWED_ORIGINS"].split(",") if origin]
 CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
-CORS_ALLOW_CREDENTIALS = True
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
